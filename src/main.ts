@@ -15,6 +15,10 @@ export async function main() {
             type: "string",
             describe: "Contentful access token",
             demandOption: true
+        }).option("environment", {
+            type: "string",
+            describe: "Contentful environment id",
+            demandOption: true
         }).option("batch-size", {
             type: "number",
             describe: "Number of parallel contentful requests",
@@ -36,6 +40,7 @@ export async function main() {
         .parse();
     const accessToken: string = argv["accesstoken"];
     const spaceId: string = argv["space-id"];
+    const environmentId: string = argv["environment"];
     const verbose: boolean = argv["verbose"];
     const batchSize: number = argv["batch-size"];
     const isContentTypes: boolean = argv["content-types"];
@@ -46,44 +51,44 @@ export async function main() {
     });
     console.log(`Opening Contentful space "${spaceId}"`);
     const contentfulSpace = await contentfulManagementClient.getSpace(spaceId);
-    console.log(`Using space "${spaceId}" (${contentfulSpace.name})`);
+    const environment = await contentfulSpace.getEnvironment(environmentId);
+    console.log(`Using environment "${environmentId}" in space "${spaceId}" (${contentfulSpace.name})`);
 
     if (!yes) {
-        if (!await promptForEntriesConfirmation(spaceId))
+        if (!await promptForEntriesConfirmation(spaceId, environmentId))
             return;
     }
-    await deleteEntries(contentfulSpace, batchSize, verbose);
+    await deleteEntries(environment, batchSize, verbose);
 
     if (isContentTypes) {
         if (!yes) {
-            if (!await promptForContentTypesConfirmation(spaceId))
+            if (!await promptForContentTypesConfirmation(spaceId, environmentId))
                 return;
         }
-        await deleteContentTypes(contentfulSpace, batchSize, verbose);
+        await deleteContentTypes(environment, batchSize, verbose);
     }
 }
 
-async function promptForEntriesConfirmation(spaceId: string) {
+async function promptForEntriesConfirmation(spaceId: string, environmentId: string) {
     const a: any = await inquirer.prompt([{
         type: "confirm",
         name: "yes",
-        message: `Do you really want to delete all entries from space ${spaceId}?`
+        message: `Do you really want to delete all entries from environment ${environmentId} in space ${spaceId}?`
     }]);
     return a.yes;
 }
 
-async function promptForContentTypesConfirmation(spaceId: string) {
+async function promptForContentTypesConfirmation(spaceId: string, environmentId: string) {
     const a: any = await inquirer.prompt([{
         type: "confirm",
         name: "yes",
-        message: `Do you really want to delete all content types from space ${spaceId}?`
+        message: `Do you really want to delete all content types from ${environmentId} in space ${spaceId}?`
     }]);
     return a.yes;
 }
 
-async function deleteEntries(contentfulSpace: any, batchSize: number, verbose: boolean) {
-    const masterEnvironment = await contentfulSpace.getEnvironment("master");
-    const entriesMetadata = await masterEnvironment.getEntries({
+async function deleteEntries(environment: any, batchSize: number, verbose: boolean) {
+    const entriesMetadata = await environment.getEntries({
         include: 0,
         limit: 0
     });
@@ -93,7 +98,7 @@ async function deleteEntries(contentfulSpace: any, batchSize: number, verbose: b
     // tslint:disable-next-line:max-line-length
     const entriesProgressBar = new ProgressBar("Deleting entries [:bar], rate: :rate/s, done: :percent, time left: :etas", { total: totalEntries });
     do {
-        const entries = await masterEnvironment.getEntries({
+        const entries = await environment.getEntries({
             include: 0,
             limit: batchSize
         });
@@ -126,9 +131,8 @@ async function unpublishAndDeleteEntry(entry: any, progressBar: ProgressBar, ver
     }
 }
 
-async function deleteContentTypes(contentfulSpace: any, batchSize: number, verbose: boolean) {
-    const masterEnvironment = await contentfulSpace.getEnvironment("master");
-    const contentTypesMetadata = await masterEnvironment.getContentTypes({
+async function deleteContentTypes(environment: any, batchSize: number, verbose: boolean) {
+    const contentTypesMetadata = await environment.getContentTypes({
         include: 0,
         limit: 0
     });
@@ -138,7 +142,7 @@ async function deleteContentTypes(contentfulSpace: any, batchSize: number, verbo
     // tslint:disable-next-line:max-line-length
     const contentTypesProgressBar = new ProgressBar("Deleting content types [:bar], rate: :rate/s, done: :percent, time left: :etas", { total: totalContentTypes });
     do {
-        const contentTypes = await contentfulSpace.getContentTypes({
+        const contentTypes = await environment.getContentTypes({
             include: 0,
             limit: batchSize
         });
